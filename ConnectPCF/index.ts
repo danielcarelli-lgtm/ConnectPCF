@@ -1,6 +1,5 @@
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 
-// Interfaz para tipar contextInfo y evitar el uso de 'any'
 interface IModeContextInfo {
     contextInfo: {
         entityId: string;
@@ -17,10 +16,11 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     private mainWrapper: HTMLDivElement;
     private stepperContainer: HTMLDivElement;
     private contentContainer: HTMLDivElement;
+    private versionLabel: HTMLDivElement;
 
-    // Valores de la Razón para el estado (Ajustar según los valores reales en tu entorno)
+    // Valores de la Razón para el estado
     private readonly STATUS_PENDIENTE = 1;
-    private readonly STATUS_EN_CURSO = 2;
+    private readonly STATUS_EN_CURSO = 919690002;
 
     public init(
         context: ComponentFramework.Context<IInputs>,
@@ -32,25 +32,29 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         this.notifyOutputChanged = notifyOutputChanged;
         this.container = container;
 
-        // Contenedor principal
         this.mainWrapper = document.createElement("div");
         this.mainWrapper.className = "connect-pcf-wrapper";
 
-        // Contenedor del flujo visual (Stepper)
         this.stepperContainer = document.createElement("div");
         this.stepperContainer.className = "connect-stepper";
 
-        // Contenedor del contenido (Etapas)
         this.contentContainer = document.createElement("div");
         this.contentContainer.className = "connect-content";
 
+        // Etiqueta de versión
+        this.versionLabel = document.createElement("div");
+        this.versionLabel.className = "version-label";
+        this.versionLabel.innerText = "v0.0.8";
+
         this.mainWrapper.appendChild(this.stepperContainer);
         this.mainWrapper.appendChild(this.contentContainer);
+        this.mainWrapper.appendChild(this.versionLabel);
         this.container.appendChild(this.mainWrapper);
     }
 
     public updateView(context: ComponentFramework.Context<IInputs>): void {
         this.context = context;
+        // Al ser un OptionSet, el .raw seguirá devolviendo el valor numérico de la opción elegida
         const currentState = context.parameters.statuscode.raw || this.STATUS_PENDIENTE;
 
         this.renderStepper(currentState);
@@ -58,7 +62,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     }
 
     private renderStepper(currentState: number): void {
-        this.stepperContainer.innerHTML = ""; // Limpiar stepper
+        this.stepperContainer.innerHTML = ""; 
 
         const steps = [
             { id: this.STATUS_PENDIENTE, label: "Pendiente" },
@@ -69,7 +73,6 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             const stepEl = document.createElement("div");
             stepEl.className = "stepper-item";
             
-            // Lógica para color mate según estado
             if (currentState === step.id) {
                 stepEl.classList.add("active");
             } else if (currentState > step.id) {
@@ -88,7 +91,6 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             stepEl.appendChild(stepLabel);
             this.stepperContainer.appendChild(stepEl);
 
-            // Línea conectora
             if (index < steps.length - 1) {
                 const line = document.createElement("div");
                 line.className = "step-line";
@@ -101,7 +103,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     }
 
     private renderContent(currentState: number): void {
-        this.contentContainer.innerHTML = ""; // Limpiar contenido previo
+        this.contentContainer.innerHTML = ""; 
 
         if (currentState === this.STATUS_PENDIENTE) {
             this.renderEtapa1();
@@ -136,25 +138,26 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     }
 
     private renderEtapa2(): void {
-        const cuentaId = this.context.parameters.sec_cuentaid.raw;
-        const ubicacionId = this.context.parameters.sec_ubicaciontecnicaid.raw;
+        const cuentaData = this.context.parameters.sec_cuentaid.raw;
+        const ubicacionData = this.context.parameters.sec_ubicaciontecnicaid.raw;
+
+        const hasCuenta = cuentaData != null && cuentaData.length > 0;
+        const hasUbicacion = ubicacionData != null && ubicacionData.length > 0;
 
         const listContainer = document.createElement("ul");
         listContainer.className = "task-list";
 
-        // Tarea 1: Cuenta
         const task1 = document.createElement("li");
         task1.className = "task-item";
-        const icon1 = this.createStatusIcon(cuentaId != null && cuentaId.trim() !== "");
+        const icon1 = this.createStatusIcon(hasCuenta);
         const text1 = document.createElement("span");
         text1.innerText = "1 - Crear nueva cuenta en CEP o asociar una existente en la pestaña “Vinculado a”.";
         task1.appendChild(icon1);
         task1.appendChild(text1);
 
-        // Tarea 2: Ubicación Técnica
         const task2 = document.createElement("li");
         task2.className = "task-item";
-        const icon2 = this.createStatusIcon(ubicacionId != null && ubicacionId.trim() !== "");
+        const icon2 = this.createStatusIcon(hasUbicacion);
         const text2 = document.createElement("span");
         text2.innerText = "2 - Crear un centro de trabajo (Ubicación o Site) o asociar una existente en la pestaña “Vinculado a”.";
         task2.appendChild(icon2);
@@ -163,12 +166,10 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         listContainer.appendChild(task1);
         listContainer.appendChild(task2);
 
-        // Botón Refrescar
         const btnRefresh = document.createElement("button");
         btnRefresh.className = "btn-icon-refresh";
-        btnRefresh.innerHTML = "🔄 Refrescar"; // Icono nativo simple
+        btnRefresh.innerHTML = "🔄 Refrescar"; 
         btnRefresh.onclick = () => {
-            // Refresca la vista releyendo los parámetros
             this.updateView(this.context);
         };
 
@@ -185,7 +186,6 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
 
     private async onComenzarClick(): Promise<void> {
         try {
-            // Casteamos para evitar el any y obtener la información del contexto extendido
             const modeInfo = this.context.mode as unknown as IModeContextInfo;
             const recordId = modeInfo.contextInfo.entityId;
             const entityName = modeInfo.contextInfo.entityTypeName;
@@ -196,18 +196,13 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
                 return;
             }
 
-            // Preparar el objeto a actualizar definiendo su estructura
             const data: Record<string, string | number> = {
                 "statuscode": this.STATUS_EN_CURSO,
-                // Asignar al usuario actual (Formato WebAPI para campos Lookup - Owner)
                 "ownerid@odata.bind": `/systemusers(${currentUserId.replace("{", "").replace("}", "")})`
             };
 
-            // Llamada a WebAPI para actualizar
             await this.context.webAPI.updateRecord(entityName, recordId, data);
             
-            // La plataforma detectará el cambio y disparará updateView automáticamente,
-            // pero podemos forzar la notificación local si la propiedad está bindeada.
             this.notifyOutputChanged();
 
         } catch (error: unknown) {
@@ -222,6 +217,6 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     }
 
     public destroy(): void {
-        // Limpieza de eventos no necesaria en este caso ya que usamos funciones delegadas nativas.
+        this.container.innerHTML = "";
     }
 }

@@ -4,6 +4,18 @@
     background-color: #f9f9f9;
     border: 1px solid #e0e0e0;
     border-radius: 8px;
+    position: relative; 
+    padding-bottom: 25px; 
+}
+
+/* --- ESTILOS DEL VERSIONADO --- */
+.version-label {
+    position: absolute;
+    bottom: 5px;
+    right: 10px;
+    font-size: 10px;
+    color: #b3b3b3; 
+    pointer-events: none; 
 }
 
 /* --- ESTILOS DEL STEPPER (FLUJO VISUAL) --- */
@@ -19,15 +31,15 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    color: #8c8c8c; /* Color mate inactivo */
+    color: #8c8c8c; 
 }
 
 .stepper-item.active {
-    color: #4a6b8c; /* Color mate activo */
+    color: #4a6b8c; 
 }
 
 .stepper-item.completed {
-    color: #5c8a63; /* Color mate completado */
+    color: #5c8a63; 
 }
 
 .step-circle {
@@ -64,7 +76,7 @@
     flex-grow: 1;
     max-width: 100px;
     margin: 0 15px;
-    margin-bottom: 20px; /* Alineación con el círculo */
+    margin-bottom: 20px; 
 }
 
 .step-line.completed-line {
@@ -87,7 +99,7 @@
 }
 
 .status-highlight {
-    background-color: #d9e2ec; /* Fondo color mate */
+    background-color: #d9e2ec; 
     color: #243b53;
     padding: 4px 8px;
     border-radius: 4px;
@@ -105,7 +117,7 @@
 }
 
 .btn-primary {
-    background-color: #4a6b8c; /* Azul mate */
+    background-color: #4a6b8c; 
     color: white;
 }
 
@@ -133,7 +145,7 @@
 }
 
 .icon-check {
-    color: #5c8a63; /* Verde mate */
+    color: #5c8a63; 
     font-weight: bold;
     font-size: 16px;
     margin-right: 10px;
@@ -142,7 +154,7 @@
 }
 
 .icon-cross {
-    color: #b75d5d; /* Rojo mate */
+    color: #b75d5d; 
     font-weight: bold;
     font-size: 16px;
     margin-right: 10px;
