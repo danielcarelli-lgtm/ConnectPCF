@@ -18,13 +18,31 @@
     pointer-events: none; 
 }
 
-/* --- ESTILOS DEL STEPPER (FLUJO VISUAL) --- */
+/* --- ESTILOS DEL STEPPER Y GRÁFICOS --- */
 .connect-stepper {
-    display: flex;
-    align-items: center;
-    justify-content: center;
     margin-bottom: 25px;
     padding: 10px 0;
+}
+
+.flow-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.steps-container {
+    display: flex;
+    align-items: center;
+    flex-grow: 1;
+}
+
+.state-graphic {
+    font-size: 38px;
+    margin-left: 20px;
+    min-width: 60px;
+    text-align: center;
+    user-select: none;
 }
 
 .stepper-item {
@@ -40,6 +58,13 @@
 
 .stepper-item.completed {
     color: #5c8a63; 
+}
+
+/* Animación de titileo para el círculo activo */
+@keyframes blink-animation {
+    0% { opacity: 1; box-shadow: 0 0 0px rgba(74, 107, 140, 0); }
+    50% { opacity: 0.6; box-shadow: 0 0 10px rgba(74, 107, 140, 0.8); }
+    100% { opacity: 1; box-shadow: 0 0 0px rgba(74, 107, 140, 0); }
 }
 
 .step-circle {
@@ -58,6 +83,7 @@
 .stepper-item.active .step-circle {
     background-color: #4a6b8c;
     color: white;
+    animation: blink-animation 1.5s infinite ease-in-out;
 }
 
 .stepper-item.completed .step-circle {
@@ -83,7 +109,7 @@
     background-color: #5c8a63;
 }
 
-/* --- ESTILOS DEL CONTENIDO ETAPA 1 --- */
+/* --- ESTILOS DE CONTENIDOS --- */
 .connect-content {
     background: white;
     padding: 20px;
@@ -104,6 +130,19 @@
     padding: 4px 8px;
     border-radius: 4px;
     font-weight: bold;
+}
+
+/* Variantes para Completado y Cancelado */
+.success-highlight {
+    background-color: #e6f4ea;
+    color: #1e8e3e;
+    font-size: 15px;
+}
+
+.danger-highlight {
+    background-color: #fce8e6;
+    color: #d93025;
+    font-size: 15px;
 }
 
 .btn-modern {
@@ -129,7 +168,7 @@
     transform: translateY(1px);
 }
 
-/* --- ESTILOS DEL CONTENIDO ETAPA 2 --- */
+/* --- ESTILOS DE TAREAS --- */
 .task-list {
     list-style: none;
     padding: 0;

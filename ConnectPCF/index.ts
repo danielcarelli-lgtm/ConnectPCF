@@ -1,9 +1,21 @@
+/* eslint-disable @microsoft/power-apps/avoid-dom-form */
 import { IInputs, IOutputs } from "./generated/ManifestTypes";
 
 interface IModeContextInfo {
     contextInfo: {
         entityId: string;
         entityTypeName: string;
+    };
+}
+
+// Interfaz para tipar el acceso global a Xrm y evitar el uso de 'any'
+interface IXrmWindow {
+    Xrm?: {
+        Page?: {
+            data?: {
+                refresh: (save: boolean) => Promise<void>;
+            };
+        };
     };
 }
 
@@ -21,6 +33,8 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     // Valores de la Razón para el estado
     private readonly STATUS_PENDIENTE = 1;
     private readonly STATUS_EN_CURSO = 919690002;
+    private readonly STATUS_COMPLETADO = 2;
+    private readonly STATUS_CANCELADO = 919690001;
 
     public init(
         context: ComponentFramework.Context<IInputs>,
@@ -44,7 +58,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         // Etiqueta de versión
         this.versionLabel = document.createElement("div");
         this.versionLabel.className = "version-label";
-        this.versionLabel.innerText = "v0.0.8";
+        this.versionLabel.innerText = "v0.0.10";
 
         this.mainWrapper.appendChild(this.stepperContainer);
         this.mainWrapper.appendChild(this.contentContainer);
@@ -54,7 +68,6 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
 
     public updateView(context: ComponentFramework.Context<IInputs>): void {
         this.context = context;
-        // Al ser un OptionSet, el .raw seguirá devolviendo el valor numérico de la opción elegida
         const currentState = context.parameters.statuscode.raw || this.STATUS_PENDIENTE;
 
         this.renderStepper(currentState);
@@ -64,18 +77,42 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     private renderStepper(currentState: number): void {
         this.stepperContainer.innerHTML = ""; 
 
+        // Mapa de orden lógico para saber qué estado está completado (evitamos problemas con IDs aleatorios)
+        const orderMap: Record<number, number> = {
+            [this.STATUS_PENDIENTE]: 1,
+            [this.STATUS_EN_CURSO]: 2,
+            [this.STATUS_COMPLETADO]: 3,
+            [this.STATUS_CANCELADO]: 3 
+        };
+
+        const currentOrder = orderMap[currentState] || 0;
+
+        // Estructura lineal: Pendiente -> En Curso -> (Completado o Cancelado)
         const steps = [
             { id: this.STATUS_PENDIENTE, label: "Pendiente" },
-            { id: this.STATUS_EN_CURSO, label: "En Curso" }
+            { id: this.STATUS_EN_CURSO, label: "En Curso" },
+            currentState === this.STATUS_CANCELADO 
+                ? { id: this.STATUS_CANCELADO, label: "Cancelado" } 
+                : { id: this.STATUS_COMPLETADO, label: "Completado" }
         ];
 
+        // Contenedores para agrupar Stepper y el Gráfico
+        const flowWrapper = document.createElement("div");
+        flowWrapper.className = "flow-wrapper";
+
+        const stepsContainer = document.createElement("div");
+        stepsContainer.className = "steps-container";
+
+        // Renderizar los pasos (Círculos y líneas)
         steps.forEach((step, index) => {
             const stepEl = document.createElement("div");
             stepEl.className = "stepper-item";
             
+            const stepOrder = orderMap[step.id];
+
             if (currentState === step.id) {
                 stepEl.classList.add("active");
-            } else if (currentState > step.id) {
+            } else if (currentOrder > stepOrder) {
                 stepEl.classList.add("completed");
             }
 
@@ -89,17 +126,33 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
 
             stepEl.appendChild(stepCircle);
             stepEl.appendChild(stepLabel);
-            this.stepperContainer.appendChild(stepEl);
+            stepsContainer.appendChild(stepEl);
 
             if (index < steps.length - 1) {
                 const line = document.createElement("div");
                 line.className = "step-line";
-                if (currentState > step.id) {
+                if (currentOrder > stepOrder) {
                     line.classList.add("completed-line");
                 }
-                this.stepperContainer.appendChild(line);
+                stepsContainer.appendChild(line);
             }
         });
+
+        // Contenedor del Gráfico dinámico
+        const graphicDiv = document.createElement("div");
+        graphicDiv.className = "state-graphic";
+        
+        let graphicContent = "🏁"; 
+        if (currentState === this.STATUS_PENDIENTE) graphicContent = "🏁🏃‍♂️"; 
+        else if (currentState === this.STATUS_EN_CURSO) graphicContent = "👨‍💻⚙️"; 
+        else if (currentState === this.STATUS_COMPLETADO) graphicContent = "🎉🏆"; 
+        else if (currentState === this.STATUS_CANCELADO) graphicContent = "😢🚫"; 
+
+        graphicDiv.innerText = graphicContent;
+
+        flowWrapper.appendChild(stepsContainer);
+        flowWrapper.appendChild(graphicDiv);
+        this.stepperContainer.appendChild(flowWrapper);
     }
 
     private renderContent(currentState: number): void {
@@ -109,6 +162,10 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             this.renderEtapa1();
         } else if (currentState === this.STATUS_EN_CURSO) {
             this.renderEtapa2();
+        } else if (currentState === this.STATUS_COMPLETADO) {
+            this.renderEtapa3();
+        } else if (currentState === this.STATUS_CANCELADO) {
+            this.renderEtapa4();
         } else {
             const defaultMsg = document.createElement("p");
             defaultMsg.innerText = "Estado actual no configurado en el cuadro de mando.";
@@ -177,6 +234,30 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         this.contentContainer.appendChild(btnRefresh);
     }
 
+    private renderEtapa3(): void {
+        const messagePara = document.createElement("p");
+        messagePara.className = "stage-message";
+        
+        const highlightSpan = document.createElement("span");
+        highlightSpan.className = "status-highlight success-highlight";
+        highlightSpan.innerText = "Enhorabuena, hemos completado el proceso";
+
+        messagePara.appendChild(highlightSpan);
+        this.contentContainer.appendChild(messagePara);
+    }
+
+    private renderEtapa4(): void {
+        const messagePara = document.createElement("p");
+        messagePara.className = "stage-message";
+        
+        const highlightSpan = document.createElement("span");
+        highlightSpan.className = "status-highlight danger-highlight";
+        highlightSpan.innerText = "Vaya.. este proceso ha sido cancelado";
+
+        messagePara.appendChild(highlightSpan);
+        this.contentContainer.appendChild(messagePara);
+    }
+
     private createStatusIcon(isValid: boolean): HTMLSpanElement {
         const icon = document.createElement("span");
         icon.className = isValid ? "icon-check" : "icon-cross";
@@ -204,6 +285,14 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             await this.context.webAPI.updateRecord(entityName, recordId, data);
             
             this.notifyOutputChanged();
+
+            // Lógica tipada para forzar el refresco nativo del formulario de Dynamics / Power Apps
+            const globalWindow = window as unknown as IXrmWindow;
+            if (globalWindow.Xrm?.Page?.data) {
+                globalWindow.Xrm.Page.data.refresh(true).catch((err: unknown) => {
+                    console.warn("No se pudo refrescar el formulario automáticamente:", err);
+                });
+            }
 
         } catch (error: unknown) {
             console.error("Error al actualizar el registro:", error);
