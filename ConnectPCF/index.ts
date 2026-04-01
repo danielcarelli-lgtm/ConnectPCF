@@ -8,7 +8,6 @@ interface IModeContextInfo {
     };
 }
 
-// Interfaz para tipar el acceso global a Xrm y evitar el uso de 'any'
 interface IXrmWindow {
     Xrm?: {
         Page?: {
@@ -36,6 +35,10 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     private readonly STATUS_COMPLETADO = 2;
     private readonly STATUS_CANCELADO = 919690001;
 
+    // Valores del Estado (StateCode)
+    private readonly STATE_ACTIVE = 0;
+    private readonly STATE_INACTIVE = 1;
+
     public init(
         context: ComponentFramework.Context<IInputs>,
         notifyOutputChanged: () => void,
@@ -58,7 +61,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         // Etiqueta de versión
         this.versionLabel = document.createElement("div");
         this.versionLabel.className = "version-label";
-        this.versionLabel.innerText = "v0.0.10";
+        this.versionLabel.innerText = "v0.0.20";
 
         this.mainWrapper.appendChild(this.stepperContainer);
         this.mainWrapper.appendChild(this.contentContainer);
@@ -77,7 +80,6 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     private renderStepper(currentState: number): void {
         this.stepperContainer.innerHTML = ""; 
 
-        // Mapa de orden lógico para saber qué estado está completado (evitamos problemas con IDs aleatorios)
         const orderMap: Record<number, number> = {
             [this.STATUS_PENDIENTE]: 1,
             [this.STATUS_EN_CURSO]: 2,
@@ -87,7 +89,6 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
 
         const currentOrder = orderMap[currentState] || 0;
 
-        // Estructura lineal: Pendiente -> En Curso -> (Completado o Cancelado)
         const steps = [
             { id: this.STATUS_PENDIENTE, label: "Pendiente" },
             { id: this.STATUS_EN_CURSO, label: "En Curso" },
@@ -96,14 +97,12 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
                 : { id: this.STATUS_COMPLETADO, label: "Completado" }
         ];
 
-        // Contenedores para agrupar Stepper y el Gráfico
         const flowWrapper = document.createElement("div");
         flowWrapper.className = "flow-wrapper";
 
         const stepsContainer = document.createElement("div");
         stepsContainer.className = "steps-container";
 
-        // Renderizar los pasos (Círculos y líneas)
         steps.forEach((step, index) => {
             const stepEl = document.createElement("div");
             stepEl.className = "stepper-item";
@@ -138,7 +137,6 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             }
         });
 
-        // Contenedor del Gráfico dinámico
         const graphicDiv = document.createElement("div");
         graphicDiv.className = "state-graphic";
         
@@ -185,13 +183,24 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         messagePara.appendChild(highlightSpan);
         messagePara.appendChild(document.createTextNode(", presiona el botón Comenzar para asignártelo y comenzar a trabajar."));
 
+        const btnGroup = document.createElement("div");
+        btnGroup.className = "button-group";
+
         const btnComenzar = document.createElement("button");
         btnComenzar.className = "btn-modern btn-primary";
         btnComenzar.innerText = "Comenzar";
         btnComenzar.onclick = this.onComenzarClick.bind(this);
 
+        const btnCancelar = document.createElement("button");
+        btnCancelar.className = "btn-modern btn-danger";
+        btnCancelar.innerText = "Cancelar";
+        btnCancelar.onclick = this.onCancelarClick.bind(this);
+
+        btnGroup.appendChild(btnComenzar);
+        btnGroup.appendChild(btnCancelar);
+
         this.contentContainer.appendChild(messagePara);
-        this.contentContainer.appendChild(btnComenzar);
+        this.contentContainer.appendChild(btnGroup);
     }
 
     private renderEtapa2(): void {
@@ -201,6 +210,9 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         const hasCuenta = cuentaData != null && cuentaData.length > 0;
         const hasUbicacion = ubicacionData != null && ubicacionData.length > 0;
 
+        const cuentaName = hasCuenta ? cuentaData![0].name : "";
+        const ubicacionName = hasUbicacion ? ubicacionData![0].name : "";
+
         const listContainer = document.createElement("ul");
         listContainer.className = "task-list";
 
@@ -208,7 +220,13 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         task1.className = "task-item";
         const icon1 = this.createStatusIcon(hasCuenta);
         const text1 = document.createElement("span");
-        text1.innerText = "1 - Crear nueva cuenta en CEP o asociar una existente en la pestaña “Vinculado a”.";
+        
+        if (hasCuenta) {
+            text1.innerText = `Ya hemos agregado la cuenta (${cuentaName}).`;
+            text1.className = "text-orange-matte";
+        } else {
+            text1.innerText = "1 - Crear nueva cuenta en CEP o asociar una existente en la pestaña “Vinculado a”.";
+        }
         task1.appendChild(icon1);
         task1.appendChild(text1);
 
@@ -216,22 +234,50 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         task2.className = "task-item";
         const icon2 = this.createStatusIcon(hasUbicacion);
         const text2 = document.createElement("span");
-        text2.innerText = "2 - Crear un centro de trabajo (Ubicación o Site) o asociar una existente en la pestaña “Vinculado a”.";
+        
+        if (hasUbicacion) {
+            text2.innerText = `Ya hemos agregado la ubicación (${ubicacionName}).`;
+            text2.className = "text-orange-matte";
+        } else {
+            text2.innerText = "2 - Crear un centro de trabajo (Ubicación o Site) o asociar una existente en la pestaña “Vinculado a”.";
+        }
         task2.appendChild(icon2);
         task2.appendChild(text2);
 
         listContainer.appendChild(task1);
         listContainer.appendChild(task2);
 
+        const btnGroup = document.createElement("div");
+        btnGroup.className = "button-group";
+
+        const btnCrearOT = document.createElement("button");
+        btnCrearOT.className = "btn-modern btn-success";
+        btnCrearOT.innerText = "Crear Orden de Trabajo";
+        if (!hasCuenta || !hasUbicacion) {
+            btnCrearOT.disabled = true;
+            btnCrearOT.title = "Complete los campos de cuenta y ubicación técnica para habilitar.";
+        } else {
+            btnCrearOT.onclick = this.onCrearOTClick.bind(this);
+        }
+
+        const btnCancelar = document.createElement("button");
+        btnCancelar.className = "btn-modern btn-danger";
+        btnCancelar.innerText = "Cancelar";
+        btnCancelar.onclick = this.onCancelarClick.bind(this);
+
         const btnRefresh = document.createElement("button");
-        btnRefresh.className = "btn-icon-refresh";
-        btnRefresh.innerHTML = "🔄 Refrescar"; 
+        btnRefresh.className = "btn-modern btn-secondary";
+        btnRefresh.innerText = "Refrescar"; 
         btnRefresh.onclick = () => {
             this.updateView(this.context);
         };
 
+        btnGroup.appendChild(btnCrearOT);
+        btnGroup.appendChild(btnCancelar);
+        btnGroup.appendChild(btnRefresh);
+
         this.contentContainer.appendChild(listContainer);
-        this.contentContainer.appendChild(btnRefresh);
+        this.contentContainer.appendChild(btnGroup);
     }
 
     private renderEtapa3(): void {
@@ -265,6 +311,62 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         return icon;
     }
 
+    private refreshDynamicsForm(): void {
+        const globalWindow = window as unknown as IXrmWindow;
+        if (globalWindow.Xrm?.Page?.data) {
+            globalWindow.Xrm.Page.data.refresh(true).catch((err: unknown) => {
+                console.warn("No se pudo refrescar el formulario automáticamente:", err);
+            });
+        }
+    }
+
+    private showErrorModal(errorText: string): void {
+        const modal = document.createElement("div");
+        modal.className = "error-modal-overlay";
+        
+        const modalContent = document.createElement("div");
+        modalContent.className = "error-modal-content";
+        
+        const title = document.createElement("h3");
+        title.innerText = "⚠️ Error al crear Orden de Trabajo";
+        title.style.color = "#b75d5d";
+        title.style.margin = "0 0 10px 0";
+        
+        const instructions = document.createElement("p");
+        instructions.innerText = "Por favor, copia todo el texto de abajo para reportar el problema exacto de Dataverse:";
+        instructions.style.fontSize = "12px";
+        instructions.style.marginBottom = "10px";
+        
+        const textArea = document.createElement("textarea");
+        textArea.readOnly = true;
+        textArea.value = errorText;
+        textArea.className = "error-textarea";
+        
+        const btnGroup = document.createElement("div");
+        btnGroup.style.display = "flex";
+        btnGroup.style.justifyContent = "flex-end";
+        btnGroup.style.marginTop = "15px";
+
+        const closeBtn = document.createElement("button");
+        closeBtn.className = "btn-modern btn-secondary";
+        closeBtn.innerText = "Cerrar";
+        closeBtn.onclick = () => {
+            if (modal.parentElement) {
+                modal.parentElement.removeChild(modal);
+            }
+        };
+        
+        btnGroup.appendChild(closeBtn);
+
+        modalContent.appendChild(title);
+        modalContent.appendChild(instructions);
+        modalContent.appendChild(textArea);
+        modalContent.appendChild(btnGroup);
+        modal.appendChild(modalContent);
+        
+        this.mainWrapper.appendChild(modal);
+    }
+
     private async onComenzarClick(): Promise<void> {
         try {
             const modeInfo = this.context.mode as unknown as IModeContextInfo;
@@ -278,6 +380,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             }
 
             const data: Record<string, string | number> = {
+                "statecode": this.STATE_ACTIVE,
                 "statuscode": this.STATUS_EN_CURSO,
                 "ownerid@odata.bind": `/systemusers(${currentUserId.replace("{", "").replace("}", "")})`
             };
@@ -285,19 +388,115 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             await this.context.webAPI.updateRecord(entityName, recordId, data);
             
             this.notifyOutputChanged();
-
-            // Lógica tipada para forzar el refresco nativo del formulario de Dynamics / Power Apps
-            const globalWindow = window as unknown as IXrmWindow;
-            if (globalWindow.Xrm?.Page?.data) {
-                globalWindow.Xrm.Page.data.refresh(true).catch((err: unknown) => {
-                    console.warn("No se pudo refrescar el formulario automáticamente:", err);
-                });
-            }
+            this.refreshDynamicsForm();
 
         } catch (error: unknown) {
             console.error("Error al actualizar el registro:", error);
             const errorMessage = error instanceof Error ? error.message : String(error);
             alert("Hubo un error al intentar comenzar: " + errorMessage);
+        }
+    }
+
+    private async onCancelarClick(): Promise<void> {
+        try {
+            const modeInfo = this.context.mode as unknown as IModeContextInfo;
+            const recordId = modeInfo.contextInfo.entityId;
+            const entityName = modeInfo.contextInfo.entityTypeName;
+
+            if (!recordId) {
+                alert("Por favor, guarde el registro antes de cancelar.");
+                return;
+            }
+
+            const data: Record<string, string | number> = {
+                "statecode": this.STATE_INACTIVE,
+                "statuscode": this.STATUS_CANCELADO
+            };
+
+            await this.context.webAPI.updateRecord(entityName, recordId, data);
+            
+            this.notifyOutputChanged();
+            this.refreshDynamicsForm();
+
+        } catch (error: unknown) {
+            console.error("Error al cancelar el registro:", error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            alert("Hubo un error al intentar cancelar: " + errorMessage);
+        }
+    }
+
+    private async onCrearOTClick(): Promise<void> {
+        let payloadEnviado = "";
+
+        try {
+            const modeInfo = this.context.mode as unknown as IModeContextInfo;
+            const recordId = modeInfo.contextInfo.entityId;
+            const entityName = modeInfo.contextInfo.entityTypeName;
+
+            if (!recordId) {
+                alert("Por favor, guarde el registro antes de continuar.");
+                return;
+            }
+
+            const cuentaData = this.context.parameters.sec_cuentaid.raw;
+            const ubicacionData = this.context.parameters.sec_ubicaciontecnicaid.raw;
+
+            if (!cuentaData || cuentaData.length === 0 || !ubicacionData || ubicacionData.length === 0) {
+                alert("Faltan datos de Cuenta o Ubicación Técnica.");
+                return;
+            }
+
+            const cuentaId = cuentaData[0].id.replace("{", "").replace("}", "");
+            const ubicacionId = ubicacionData[0].id.replace("{", "").replace("}", "");
+            
+            const tipoIncidenteId = "c7b290d7-1c2d-f111-88b4-7c1e527828ba";
+            const prioridadId = "db54a64a-dff5-ed11-8e4b-002248a6ca1f";
+
+            const woData: Record<string, string | number> = {
+                "msdyn_serviceaccount@odata.bind": `/accounts(${cuentaId})`,
+                "msdyn_FunctionalLocation@odata.bind": `/msdyn_functionallocations(${ubicacionId})`,
+                "msdyn_primaryincidenttype@odata.bind": `/msdyn_incidenttypes(${tipoIncidenteId})`,
+                "msdyn_priority@odata.bind": `/msdyn_priorities(${prioridadId})`,
+                "msdyn_workordersummary": "Generado desde proceso Connect"
+            };
+
+            payloadEnviado = JSON.stringify(woData, null, 2);
+
+            // 1. Creación de Orden de Trabajo
+            await this.context.webAPI.createRecord("msdyn_workorder", woData);
+
+            // 2. Actualización de Connect a Completado (State=1, Status=2)
+            const updateData: Record<string, string | number> = {
+                "statecode": this.STATE_INACTIVE, 
+                "statuscode": this.STATUS_COMPLETADO 
+            };
+            await this.context.webAPI.updateRecord(entityName, recordId, updateData);
+            
+            this.notifyOutputChanged();
+            this.refreshDynamicsForm();
+
+        } catch (error: unknown) {
+            console.error("Error completo al crear Orden de Trabajo:", error);
+            
+            let errorDetails = "";
+            if (error instanceof Error) {
+                errorDetails = error.message;
+            } else if (typeof error === "object" && error !== null) {
+                const errObj = error as Record<string, unknown>;
+                if ('message' in errObj && typeof errObj.message === 'string') {
+                    errorDetails = errObj.message;
+                }
+                try {
+                    errorDetails += "\n\n--- JSON RAW DEL ERROR ---\n" + JSON.stringify(error, null, 2);
+                } catch (e) {
+                    errorDetails += "\n\n(No se pudo convertir a JSON el objeto de error)";
+                }
+            } else {
+                errorDetails = String(error);
+            }
+
+            const mensajeFinal = `--- PAYLOAD ENVIADO ---\n${payloadEnviado}\n\n--- DETALLE DEL ERROR ---\n${errorDetails}`;
+            this.showErrorModal(mensajeFinal);
         }
     }
 
