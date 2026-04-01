@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest>
-  <control namespace="sec" constructor="ConnectPCF" version="0.0.20" display-name-key="ConnectPCF" description-key="ConnectPCF description" control-type="standard" >
+  <control namespace="sec" constructor="ConnectPCF" version="0.0.25" display-name-key="ConnectPCF" description-key="ConnectPCF description" control-type="standard" >
     <external-service-usage enabled="false">
     </external-service-usage>
     

@@ -32,7 +32,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     // Valores de la Razón para el estado
     private readonly STATUS_PENDIENTE = 1;
     private readonly STATUS_EN_CURSO = 919690002;
-    private readonly STATUS_COMPLETADO = 2;
+    private readonly STATUS_COMPLETADO = 2; 
     private readonly STATUS_CANCELADO = 919690001;
 
     // Valores del Estado (StateCode)
@@ -61,7 +61,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         // Etiqueta de versión
         this.versionLabel = document.createElement("div");
         this.versionLabel.className = "version-label";
-        this.versionLabel.innerText = "v0.0.20";
+        this.versionLabel.innerText = "v0.0.25";
 
         this.mainWrapper.appendChild(this.stepperContainer);
         this.mainWrapper.appendChild(this.contentContainer);
@@ -462,21 +462,26 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
 
             payloadEnviado = JSON.stringify(woData, null, 2);
 
-            // 1. Creación de Orden de Trabajo
-            await this.context.webAPI.createRecord("msdyn_workorder", woData);
+            // 1. Creación de la Orden de Trabajo
+            const createdWorkOrder = await this.context.webAPI.createRecord("msdyn_workorder", woData);
+            
+            const newWoId = createdWorkOrder.id.replace("{", "").replace("}", "");
 
-            // 2. Actualización de Connect a Completado (State=1, Status=2)
+            // 2. Actualización de Connect a Completado Y vinculación de la Orden de Trabajo creada
             const updateData: Record<string, string | number> = {
                 "statecode": this.STATE_INACTIVE, 
-                "statuscode": this.STATUS_COMPLETADO 
+                "statuscode": this.STATUS_COMPLETADO,
+                // Usando exactamente el payload que has indicado como correcto
+                "sec_ordendetrabajoid@odata.bind": `/msdyn_workorders(${newWoId})` 
             };
+            
             await this.context.webAPI.updateRecord(entityName, recordId, updateData);
             
             this.notifyOutputChanged();
             this.refreshDynamicsForm();
 
         } catch (error: unknown) {
-            console.error("Error completo al crear Orden de Trabajo:", error);
+            console.error("Error completo:", error);
             
             let errorDetails = "";
             if (error instanceof Error) {
