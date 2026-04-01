@@ -239,7 +239,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             text2.innerText = `Ya hemos agregado la ubicación (${ubicacionName}).`;
             text2.className = "text-orange-matte";
         } else {
-            text2.innerText = "2 - Crear un centro de trabajo (Ubicación o Site) o asociar una existente en la pestaña “Vinculado a”.";
+            text2.innerText = "2 - Crear un centro de trabajo en CEP (Ubicación o Site) o asociar uno existente en la pestaña “Vinculado a”.";
         }
         task2.appendChild(icon2);
         task2.appendChild(text2);
