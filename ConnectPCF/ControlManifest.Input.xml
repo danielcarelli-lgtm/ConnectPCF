@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest>
-  <control namespace="sec" constructor="ConnectPCF" version="0.0.25" display-name-key="ConnectPCF" description-key="ConnectPCF description" control-type="standard" >
+  <control namespace="sec" constructor="ConnectPCF" version="0.0.32" display-name-key="ConnectPCF" description-key="ConnectPCF description" control-type="standard" >
     <external-service-usage enabled="false">
     </external-service-usage>
     
@@ -8,6 +8,8 @@
     
     <property name="sec_cuentaid" display-name-key="Cuenta ID" description-key="Lookup a la cuenta vinculada" of-type="Lookup.Simple" usage="bound" required="false" />
     <property name="sec_ubicaciontecnicaid" display-name-key="Ubicación Técnica ID" description-key="Lookup a la ubicación técnica" of-type="Lookup.Simple" usage="bound" required="false" />
+    
+    <property name="sec_sistemainstalado" display-name-key="Sistema Instalado" description-key="Indica si el sistema está instalado (Sí/No)" of-type="TwoOptions" usage="bound" required="false" />
 
     <resources>
       <code path="index.ts" order="1"/>

@@ -31,9 +31,10 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
 
     // Valores de la Razón para el estado
     private readonly STATUS_PENDIENTE = 1;
-    private readonly STATUS_EN_CURSO = 919690002;
     private readonly STATUS_COMPLETADO = 2; 
+    private readonly STATUS_INSTALADO = 909540001;
     private readonly STATUS_CANCELADO = 919690001;
+    private readonly STATUS_EN_CURSO = 919690002;
 
     // Valores del Estado (StateCode)
     private readonly STATE_ACTIVE = 0;
@@ -61,7 +62,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         // Etiqueta de versión
         this.versionLabel = document.createElement("div");
         this.versionLabel.className = "version-label";
-        this.versionLabel.innerText = "v0.0.25";
+        this.versionLabel.innerText = "v0.0.32";
 
         this.mainWrapper.appendChild(this.stepperContainer);
         this.mainWrapper.appendChild(this.contentContainer);
@@ -77,6 +78,39 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         this.renderContent(currentState);
     }
 
+    // Helper para bloquear o desbloquear botones y evitar dobles clics
+    private setButtonsDisabled(disabled: boolean): void {
+        const buttons = this.container.querySelectorAll(".btn-modern");
+        buttons.forEach((btn) => {
+            (btn as HTMLButtonElement).disabled = disabled;
+            if (disabled) {
+                (btn as HTMLButtonElement).style.opacity = "0.5";
+                (btn as HTMLButtonElement).style.cursor = "wait";
+            } else {
+                (btn as HTMLButtonElement).style.opacity = "1";
+                (btn as HTMLButtonElement).style.cursor = "pointer";
+            }
+        });
+    }
+
+    // Función para crear el mensaje de estado con colores dinámicos
+    private createStageMessage(estadoLabel: string, color: string, extraText: string): HTMLParagraphElement {
+        const messagePara = document.createElement("p");
+        messagePara.className = "stage-message";
+
+        const highlightSpan = document.createElement("span");
+        highlightSpan.className = "status-highlight";
+        highlightSpan.style.color = color;
+        highlightSpan.style.fontWeight = "bold";
+        highlightSpan.innerText = estadoLabel;
+
+        messagePara.appendChild(document.createTextNode("Este Connect se encuentra en estado "));
+        messagePara.appendChild(highlightSpan);
+        messagePara.appendChild(document.createTextNode(extraText));
+
+        return messagePara;
+    }
+
     private renderStepper(currentState: number): void {
         this.stepperContainer.innerHTML = ""; 
 
@@ -84,17 +118,19 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             [this.STATUS_PENDIENTE]: 1,
             [this.STATUS_EN_CURSO]: 2,
             [this.STATUS_COMPLETADO]: 3,
-            [this.STATUS_CANCELADO]: 3 
+            [this.STATUS_INSTALADO]: 4,
+            [this.STATUS_CANCELADO]: 4 
         };
 
         const currentOrder = orderMap[currentState] || 0;
 
         const steps = [
-            { id: this.STATUS_PENDIENTE, label: "Pendiente" },
-            { id: this.STATUS_EN_CURSO, label: "En Curso" },
+            { id: this.STATUS_PENDIENTE, label: "Pendiente de gestión" },
+            { id: this.STATUS_EN_CURSO, label: "Gestión en curso" },
+            { id: this.STATUS_COMPLETADO, label: "Pendiente de instalación" },
             currentState === this.STATUS_CANCELADO 
                 ? { id: this.STATUS_CANCELADO, label: "Cancelado" } 
-                : { id: this.STATUS_COMPLETADO, label: "Completado" }
+                : { id: this.STATUS_INSTALADO, label: "Instalado" }
         ];
 
         const flowWrapper = document.createElement("div");
@@ -143,7 +179,8 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         let graphicContent = "🏁"; 
         if (currentState === this.STATUS_PENDIENTE) graphicContent = "🏁🏃‍♂️"; 
         else if (currentState === this.STATUS_EN_CURSO) graphicContent = "👨‍💻⚙️"; 
-        else if (currentState === this.STATUS_COMPLETADO) graphicContent = "🎉🏆"; 
+        else if (currentState === this.STATUS_COMPLETADO) graphicContent = "✅📋"; 
+        else if (currentState === this.STATUS_INSTALADO) graphicContent = "🎉🏆"; 
         else if (currentState === this.STATUS_CANCELADO) graphicContent = "😢🚫"; 
 
         graphicDiv.innerText = graphicContent;
@@ -162,8 +199,10 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             this.renderEtapa2();
         } else if (currentState === this.STATUS_COMPLETADO) {
             this.renderEtapa3();
-        } else if (currentState === this.STATUS_CANCELADO) {
+        } else if (currentState === this.STATUS_INSTALADO) {
             this.renderEtapa4();
+        } else if (currentState === this.STATUS_CANCELADO) {
+            this.renderEtapaCancelado();
         } else {
             const defaultMsg = document.createElement("p");
             defaultMsg.innerText = "Estado actual no configurado en el cuadro de mando.";
@@ -172,16 +211,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     }
 
     private renderEtapa1(): void {
-        const messagePara = document.createElement("p");
-        messagePara.className = "stage-message";
-        
-        const highlightSpan = document.createElement("span");
-        highlightSpan.className = "status-highlight";
-        highlightSpan.innerText = "Pendiente";
-
-        messagePara.appendChild(document.createTextNode("Este Connect se encuentra en estado "));
-        messagePara.appendChild(highlightSpan);
-        messagePara.appendChild(document.createTextNode(", presiona el botón Comenzar para asignártelo y comenzar a trabajar."));
+        const messagePara = this.createStageMessage("Pendiente de gestión", "#f39c12", ", presiona el botón Comenzar para asignártelo y empezar a trabajar.");
 
         const btnGroup = document.createElement("div");
         btnGroup.className = "button-group";
@@ -204,6 +234,9 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     }
 
     private renderEtapa2(): void {
+        const messagePara = this.createStageMessage("Gestión en curso", "#3498db", ", completa los requisitos para generar la Orden de Trabajo.");
+        this.contentContainer.appendChild(messagePara);
+
         const cuentaData = this.context.parameters.sec_cuentaid.raw;
         const ubicacionData = this.context.parameters.sec_ubicaciontecnicaid.raw;
 
@@ -281,26 +314,50 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     }
 
     private renderEtapa3(): void {
-        const messagePara = document.createElement("p");
-        messagePara.className = "stage-message";
+        const messagePara = this.createStageMessage("Pendiente de instalación", "#9b59b6", ", la Orden de Trabajo ha sido generada exitosamente.");
         
-        const highlightSpan = document.createElement("span");
-        highlightSpan.className = "status-highlight success-highlight";
-        highlightSpan.innerText = "Enhorabuena, hemos completado el proceso";
+        const listContainer = document.createElement("ul");
+        listContainer.className = "task-list";
 
-        messagePara.appendChild(highlightSpan);
+        const task1 = document.createElement("li");
+        task1.className = "task-item";
+        const icon1 = document.createElement("span");
+        icon1.innerText = "⏳";
+        icon1.style.marginRight = "10px";
+        icon1.style.fontSize = "16px";
+        const text1 = document.createElement("span");
+        text1.innerText = "En espera de la finalización de la Orden de trabajo de instalación.";
+        
+        task1.appendChild(icon1);
+        task1.appendChild(text1);
+        listContainer.appendChild(task1);
+
+        const btnGroup = document.createElement("div");
+        btnGroup.className = "button-group";
+
+        // Solo dejamos el botón Refrescar, ya que Power Automate mueve el estado a Instalado
+        const btnRefresh = document.createElement("button");
+        btnRefresh.className = "btn-modern btn-secondary";
+        btnRefresh.innerText = "Refrescar estado";
+        btnRefresh.onclick = () => {
+            this.updateView(this.context);
+            this.refreshDynamicsForm();
+        };
+
+        btnGroup.appendChild(btnRefresh);
+
         this.contentContainer.appendChild(messagePara);
+        this.contentContainer.appendChild(listContainer);
+        this.contentContainer.appendChild(btnGroup);
     }
 
     private renderEtapa4(): void {
-        const messagePara = document.createElement("p");
-        messagePara.className = "stage-message";
-        
-        const highlightSpan = document.createElement("span");
-        highlightSpan.className = "status-highlight danger-highlight";
-        highlightSpan.innerText = "Vaya.. este proceso ha sido cancelado";
+        const messagePara = this.createStageMessage("Instalado", "#2ecc71", ", el sistema ha sido validado y el proceso ha finalizado con éxito.");
+        this.contentContainer.appendChild(messagePara);
+    }
 
-        messagePara.appendChild(highlightSpan);
+    private renderEtapaCancelado(): void {
+        const messagePara = this.createStageMessage("Cancelado", "#e74c3c", ", el proceso ha sido abortado.");
         this.contentContainer.appendChild(messagePara);
     }
 
@@ -328,7 +385,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         modalContent.className = "error-modal-content";
         
         const title = document.createElement("h3");
-        title.innerText = "⚠️ Error al crear Orden de Trabajo";
+        title.innerText = "⚠️ Error durante la operación";
         title.style.color = "#b75d5d";
         title.style.margin = "0 0 10px 0";
         
@@ -368,6 +425,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     }
 
     private async onComenzarClick(): Promise<void> {
+        this.setButtonsDisabled(true);
         try {
             const modeInfo = this.context.mode as unknown as IModeContextInfo;
             const recordId = modeInfo.contextInfo.entityId;
@@ -376,6 +434,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
 
             if (!recordId) {
                 alert("Por favor, guarde el registro antes de comenzar.");
+                this.setButtonsDisabled(false);
                 return;
             }
 
@@ -391,6 +450,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             this.refreshDynamicsForm();
 
         } catch (error: unknown) {
+            this.setButtonsDisabled(false);
             console.error("Error al actualizar el registro:", error);
             const errorMessage = error instanceof Error ? error.message : String(error);
             alert("Hubo un error al intentar comenzar: " + errorMessage);
@@ -398,6 +458,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     }
 
     private async onCancelarClick(): Promise<void> {
+        this.setButtonsDisabled(true);
         try {
             const modeInfo = this.context.mode as unknown as IModeContextInfo;
             const recordId = modeInfo.contextInfo.entityId;
@@ -405,6 +466,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
 
             if (!recordId) {
                 alert("Por favor, guarde el registro antes de cancelar.");
+                this.setButtonsDisabled(false);
                 return;
             }
 
@@ -419,6 +481,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             this.refreshDynamicsForm();
 
         } catch (error: unknown) {
+            this.setButtonsDisabled(false);
             console.error("Error al cancelar el registro:", error);
             const errorMessage = error instanceof Error ? error.message : String(error);
             alert("Hubo un error al intentar cancelar: " + errorMessage);
@@ -426,6 +489,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     }
 
     private async onCrearOTClick(): Promise<void> {
+        this.setButtonsDisabled(true);
         let payloadEnviado = "";
 
         try {
@@ -435,6 +499,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
 
             if (!recordId) {
                 alert("Por favor, guarde el registro antes de continuar.");
+                this.setButtonsDisabled(false);
                 return;
             }
 
@@ -443,6 +508,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
 
             if (!cuentaData || cuentaData.length === 0 || !ubicacionData || ubicacionData.length === 0) {
                 alert("Faltan datos de Cuenta o Ubicación Técnica.");
+                this.setButtonsDisabled(false);
                 return;
             }
 
@@ -467,11 +533,10 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             
             const newWoId = createdWorkOrder.id.replace("{", "").replace("}", "");
 
-            // 2. Actualización de Connect a Completado Y vinculación de la Orden de Trabajo creada
+            // 2. Actualización de Connect
             const updateData: Record<string, string | number> = {
                 "statecode": this.STATE_INACTIVE, 
                 "statuscode": this.STATUS_COMPLETADO,
-                // Usando exactamente el payload que has indicado como correcto
                 "sec_ordendetrabajoid@odata.bind": `/msdyn_workorders(${newWoId})` 
             };
             
@@ -481,6 +546,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             this.refreshDynamicsForm();
 
         } catch (error: unknown) {
+            this.setButtonsDisabled(false);
             console.error("Error completo:", error);
             
             let errorDetails = "";
