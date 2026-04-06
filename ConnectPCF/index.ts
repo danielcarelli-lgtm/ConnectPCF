@@ -40,6 +40,9 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     private readonly STATE_ACTIVE = 0;
     private readonly STATE_INACTIVE = 1;
 
+    // Control para evitar hacer spam de peticiones a Dataverse en la autoverificación (Tipo inferido automáticamente)
+    private lastAutoCheckTime = 0;
+
     public init(
         context: ComponentFramework.Context<IInputs>,
         notifyOutputChanged: () => void,
@@ -62,7 +65,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         // Etiqueta de versión
         this.versionLabel = document.createElement("div");
         this.versionLabel.className = "version-label";
-        this.versionLabel.innerText = "v0.0.32";
+        this.versionLabel.innerText = "v0.0.38";
 
         this.mainWrapper.appendChild(this.stepperContainer);
         this.mainWrapper.appendChild(this.contentContainer);
@@ -76,6 +79,16 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
 
         this.renderStepper(currentState);
         this.renderContent(currentState);
+
+        // Disparamos la autoverificación silenciosa si estamos en la fase Pendiente de Instalación
+        if (currentState === this.STATUS_COMPLETADO) {
+            const now = Date.now();
+            // Evitamos hacer la petición más de una vez cada 10 segundos
+            if (now - this.lastAutoCheckTime > 10000) {
+                this.lastAutoCheckTime = now;
+                this.autoCheckOTStatus();
+            }
+        }
     }
 
     // Helper para bloquear o desbloquear botones y evitar dobles clics
@@ -335,16 +348,34 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
         const btnGroup = document.createElement("div");
         btnGroup.className = "button-group";
 
-        // Solo dejamos el botón Refrescar, ya que Power Automate mueve el estado a Instalado
-        const btnRefresh = document.createElement("button");
-        btnRefresh.className = "btn-modern btn-secondary";
-        btnRefresh.innerText = "Refrescar estado";
-        btnRefresh.onclick = () => {
-            this.updateView(this.context);
-            this.refreshDynamicsForm();
-        };
+        const btnValidar = document.createElement("button");
+        btnValidar.className = "btn-modern btn-primary";
+        btnValidar.innerText = "Verificar finalización de OT";
+        btnValidar.onclick = this.onValidarOTClick.bind(this);
 
-        btnGroup.appendChild(btnRefresh);
+        btnGroup.appendChild(btnValidar);
+
+        // --- Novedad: Botón para abrir la Orden de Trabajo ---
+        const otData = this.context.parameters.sec_ordendetrabajoid?.raw;
+        if (otData && otData.length > 0) {
+            const otId = otData[0].id.replace("{", "").replace("}", "");
+            const otName = otData[0].name || "Orden de Trabajo";
+
+            const btnOpenOT = document.createElement("button");
+            btnOpenOT.className = "btn-modern btn-secondary";
+            btnOpenOT.innerText = `${otName}`;
+            btnOpenOT.title = "Abrir la Orden de Trabajo en una ventana emergente";
+            btnOpenOT.onclick = () => {
+                this.context.navigation.openForm({
+                    entityName: "msdyn_workorder",
+                    entityId: otId,
+                    openInNewWindow: true,
+                    windowPosition: 1 // Abre en formato modal/diálogo en el centro
+                }).catch(err => console.error("Error al abrir la OT:", err));
+            };
+
+            btnGroup.appendChild(btnOpenOT);
+        }
 
         this.contentContainer.appendChild(messagePara);
         this.contentContainer.appendChild(listContainer);
@@ -354,6 +385,32 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
     private renderEtapa4(): void {
         const messagePara = this.createStageMessage("Instalado", "#2ecc71", ", el sistema ha sido validado y el proceso ha finalizado con éxito.");
         this.contentContainer.appendChild(messagePara);
+
+        // --- Novedad: Grupo de botones y botón para abrir la OT en fase Instalado ---
+        const otData = this.context.parameters.sec_ordendetrabajoid?.raw;
+        if (otData && otData.length > 0) {
+            const otId = otData[0].id.replace("{", "").replace("}", "");
+            const otName = otData[0].name || "Orden de Trabajo";
+
+            const btnGroup = document.createElement("div");
+            btnGroup.className = "button-group";
+
+            const btnOpenOT = document.createElement("button");
+            btnOpenOT.className = "btn-modern btn-primary"; // Primario aquí ya que no hay otra acción principal
+            btnOpenOT.innerText = `${otName}`;
+            btnOpenOT.title = "Abrir la Orden de Trabajo en una ventana emergente";
+            btnOpenOT.onclick = () => {
+                this.context.navigation.openForm({
+                    entityName: "msdyn_workorder",
+                    entityId: otId,
+                    openInNewWindow: true,
+                    windowPosition: 1 // Abre en formato modal/diálogo en el centro
+                }).catch(err => console.error("Error al abrir la OT:", err));
+            };
+
+            btnGroup.appendChild(btnOpenOT);
+            this.contentContainer.appendChild(btnGroup);
+        }
     }
 
     private renderEtapaCancelado(): void {
@@ -533,7 +590,7 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
             
             const newWoId = createdWorkOrder.id.replace("{", "").replace("}", "");
 
-            // 2. Actualización de Connect
+            // 2. Actualización de Connect a Completo Y vinculación de la Orden de Trabajo
             const updateData: Record<string, string | number> = {
                 "statecode": this.STATE_INACTIVE, 
                 "statuscode": this.STATUS_COMPLETADO,
@@ -568,6 +625,95 @@ export class ConnectPCF implements ComponentFramework.StandardControl<IInputs, I
 
             const mensajeFinal = `--- PAYLOAD ENVIADO ---\n${payloadEnviado}\n\n--- DETALLE DEL ERROR ---\n${errorDetails}`;
             this.showErrorModal(mensajeFinal);
+        }
+    }
+
+    // --- Función para autoverificar silenciosamente la OT en background ---
+    private async autoCheckOTStatus(): Promise<void> {
+        try {
+            const woData = this.context.parameters.sec_ordendetrabajoid?.raw;
+            if (!woData || woData.length === 0) return;
+
+            const woId = woData[0].id.replace("{", "").replace("}", "");
+            
+            const wo = await this.context.webAPI.retrieveRecord("msdyn_workorder", woId, "?$select=msdyn_systemstatus");
+            const status = wo.msdyn_systemstatus;
+            
+            if (status === 690970003 || status === 690970004) {
+                const modeInfo = this.context.mode as unknown as IModeContextInfo;
+                const recordId = modeInfo.contextInfo.entityId;
+                const entityName = modeInfo.contextInfo.entityTypeName;
+
+                const updateData: Record<string, string | number> = {
+                    "statecode": this.STATE_INACTIVE,
+                    "statuscode": this.STATUS_INSTALADO
+                };
+
+                await this.context.webAPI.updateRecord(entityName, recordId, updateData);
+                
+                this.notifyOutputChanged();
+                this.refreshDynamicsForm();
+            }
+        } catch (error: unknown) {
+            console.warn("Fallo silencioso al autoverificar la OT. No se interrumpe al usuario.", error);
+        }
+    }
+
+    // Función manual invocada por el botón
+    private async onValidarOTClick(): Promise<void> {
+        this.setButtonsDisabled(true);
+        try {
+            const woData = this.context.parameters.sec_ordendetrabajoid?.raw;
+            if (!woData || woData.length === 0) {
+                alert("No se ha encontrado ninguna Orden de Trabajo vinculada a este registro Connect. Revise el campo de Orden de Trabajo.");
+                this.setButtonsDisabled(false);
+                return;
+            }
+
+            const woId = woData[0].id.replace("{", "").replace("}", "");
+            
+            // Consultamos la OT vinculada a través de la WebAPI de Dataverse
+            const wo = await this.context.webAPI.retrieveRecord("msdyn_workorder", woId, "?$select=msdyn_systemstatus");
+
+            // Validamos que el estado sea Completado o Publicado
+            const status = wo.msdyn_systemstatus;
+            
+            if (status === 690970003 || status === 690970004) {
+                const modeInfo = this.context.mode as unknown as IModeContextInfo;
+                const recordId = modeInfo.contextInfo.entityId;
+                const entityName = modeInfo.contextInfo.entityTypeName;
+
+                const updateData: Record<string, string | number> = {
+                    "statecode": this.STATE_INACTIVE,
+                    "statuscode": this.STATUS_INSTALADO
+                };
+
+                await this.context.webAPI.updateRecord(entityName, recordId, updateData);
+                
+                this.notifyOutputChanged();
+                this.refreshDynamicsForm();
+            } else {
+                alert(`La Orden de Trabajo asociada aún no está Completada.\n(Código actual de estado del sistema: ${status})`);
+                this.setButtonsDisabled(false);
+            }
+
+        } catch (error: unknown) {
+            this.setButtonsDisabled(false);
+            console.error("Error al verificar la OT:", error);
+            
+            let errorDetails = "";
+            if (error instanceof Error) {
+                errorDetails = error.message;
+            } else if (typeof error === "object" && error !== null) {
+                const errObj = error as Record<string, unknown>;
+                if ('message' in errObj && typeof errObj.message === 'string') {
+                    errorDetails = errObj.message;
+                }
+            } else {
+                errorDetails = String(error);
+            }
+
+            this.showErrorModal("Error al consultar la Orden de Trabajo en Dataverse: " + errorDetails);
         }
     }
 
